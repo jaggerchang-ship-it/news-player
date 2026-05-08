@@ -20,7 +20,7 @@
             padding: 20px;
         }
         .player-container {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.98);
             border-radius: 24px;
             padding: 40px;
             max-width: 480px;
@@ -41,6 +41,37 @@
             color: #666;
             font-size: 14px;
         }
+        .episode-selector {
+            margin-bottom: 20px;
+        }
+        .episode-selector label {
+            display: block;
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        .episode-select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            background: #f8f9fa;
+            cursor: pointer;
+            outline: none;
+        }
+        .episode-select:focus {
+            border-color: #667eea;
+        }
+        .loading-indicator {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            display: none;
+        }
+        .loading-indicator.show {
+            display: block;
+        }
         .album-art {
             width: 200px;
             height: 200px;
@@ -51,22 +82,49 @@
             justify-content: center;
             align-items: center;
             box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+            transition: transform 0.3s ease;
+        }
+        .album-art.playing {
             animation: pulse 2s ease-in-out infinite;
+        }
+        .album-art.loading {
+            animation: spin 1s linear infinite;
         }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.02); }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
         .album-art::before {
             content: '🎙️';
             font-size: 80px;
         }
         .album-art.playing::before {
+            content: '🎵';
             animation: bounce 0.5s ease-in-out infinite;
         }
         @keyframes bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-5px); }
+        }
+        .episode-info {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+            border-radius: 12px;
+        }
+        .episode-info h3 {
+            color: #1a1a2e;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .episode-info p {
+            color: #666;
+            font-size: 13px;
         }
         .progress-container {
             margin-bottom: 20px;
@@ -78,6 +136,7 @@
             border-radius: 3px;
             cursor: pointer;
             position: relative;
+            overflow: hidden;
         }
         .progress-fill {
             height: 100%;
@@ -112,6 +171,10 @@
             opacity: 1;
             transform: scale(1.1);
         }
+        .control-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
         .play-btn {
             width: 64px;
             height: 64px;
@@ -129,6 +192,10 @@
             transform: scale(1.05);
             box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
         }
+        .play-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
         .play-btn::before {
             content: '▶️';
             font-size: 28px;
@@ -142,7 +209,7 @@
             gap: 10px;
         }
         .volume-slider {
-            width: 100px;
+            flex: 1;
             height: 4px;
             -webkit-appearance: none;
             background: #e0e0e0;
@@ -201,6 +268,19 @@
             color: #999;
             font-size: 11px;
         }
+        .error-msg {
+            background: #fee;
+            color: #c00;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 13px;
+            display: none;
+        }
+        .error-msg.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -210,7 +290,25 @@
             <p id="date"></p>
         </div>
         
+        <div class="error-msg" id="errorMsg"></div>
+        
+        <div class="episode-selector">
+            <label>选择期次</label>
+            <select class="episode-select" id="episodeSelect">
+                <option value="">加载中...</option>
+            </select>
+        </div>
+        
+        <div class="loading-indicator" id="loadingIndicator">
+            🔄 正在加载音频...
+        </div>
+        
         <div class="album-art" id="albumArt"></div>
+        
+        <div class="episode-info" id="episodeInfo">
+            <h3 id="episodeTitle">选择一期开始收听</h3>
+            <p id="episodeDate"></p>
+        </div>
         
         <div class="progress-container">
             <div class="progress-bar" id="progressBar">
@@ -223,9 +321,9 @@
         </div>
         
         <div class="controls">
-            <button class="control-btn" id="prevBtn">⏮️</button>
-            <button class="play-btn" id="playBtn"></button>
-            <button class="control-btn" id="nextBtn">⏭️</button>
+            <button class="control-btn" id="prevBtn" title="快退10秒">⏮️</button>
+            <button class="play-btn" id="playBtn" disabled></button>
+            <button class="control-btn" id="nextBtn" title="快进10秒">⏭️</button>
         </div>
         
         <div class="volume-container">
@@ -235,19 +333,26 @@
         </div>
         
         <div class="audio-source">
-            <label>音频链接</label>
-            <input type="text" id="audioUrl" placeholder="输入音频文件链接" value="https://jsonproxy.3g.qq.com/urlmapper/kHMH2S">
-            <button class="update-btn" id="updateBtn">加载音频</button>
+            <label>或直接输入音频链接</label>
+            <input type="text" id="audioUrl" placeholder="输入音频文件链接">
+            <button class="update-btn" id="updateBtn">加载自定义音频</button>
         </div>
         
         <div class="footer">
-            由 OpenClaw 自动生成
+            由 OpenClaw 自动生成 · GitHub Pages 托管
         </div>
     </div>
     
     <audio id="audio" preload="auto"></audio>
     
     <script>
+        // Configuration
+        const CONFIG = {
+            audioBaseUrl: 'https://raw.githubusercontent.com/jaggerchang-ship-it/news-player/main/audio/',
+            indexUrl: 'https://raw.githubusercontent.com/jaggerchang-ship-it/news-player/main/audio/index.json'
+        };
+        
+        // DOM Elements
         const audio = document.getElementById('audio');
         const playBtn = document.getElementById('playBtn');
         const albumArt = document.getElementById('albumArt');
@@ -260,6 +365,15 @@
         const updateBtn = document.getElementById('updateBtn');
         const prevBtn = document.getElementById('prevBtn');
         const nextBtn = document.getElementById('nextBtn');
+        const episodeSelect = document.getElementById('episodeSelect');
+        const episodeTitle = document.getElementById('episodeTitle');
+        const episodeDate = document.getElementById('episodeDate');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMsg = document.getElementById('errorMsg');
+        
+        // State
+        let episodes = [];
+        let currentEpisode = null;
         
         // Set today's date
         document.getElementById('date').textContent = new Date().toLocaleDateString('zh-CN', {
@@ -270,15 +384,109 @@
         
         // Format time
         function formatTime(seconds) {
+            if (isNaN(seconds) || seconds < 0) return '0:00';
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
         
+        // Show error
+        function showError(message) {
+            errorMsg.textContent = message;
+            errorMsg.classList.add('show');
+            setTimeout(() => errorMsg.classList.remove('show'), 5000);
+        }
+        
+        // Show loading
+        function showLoading(show) {
+            loadingIndicator.classList.toggle('show', show);
+            albumArt.classList.toggle('loading', show);
+        }
+        
+        // Load episodes from index
+        async function loadEpisodes() {
+            try {
+                showLoading(true);
+                const response = await fetch(CONFIG.indexUrl);
+                if (!response.ok) throw new Error('无法加载节目列表');
+                
+                const data = await response.json();
+                episodes = data.episodes || [];
+                
+                // Populate select
+                episodeSelect.innerHTML = '';
+                if (episodes.length === 0) {
+                    episodeSelect.innerHTML = '<option value="">暂无节目</option>';
+                } else {
+                    episodes.forEach((ep, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = `${ep.date} - ${ep.title}`;
+                        episodeSelect.appendChild(option);
+                    });
+                    // Auto-select latest
+                    episodeSelect.selectedIndex = 0;
+                    loadEpisode(0);
+                }
+            } catch (error) {
+                console.error('Load episodes error:', error);
+                showError('加载节目列表失败，请检查网络或输入自定义链接');
+                episodeSelect.innerHTML = '<option value="">加载失败</option>';
+                // Enable custom URL input as fallback
+                audioUrlInput.placeholder = '请输入音频链接';
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Load selected episode
+        function loadEpisode(index) {
+            if (index < 0 || index >= episodes.length) return;
+            
+            const episode = episodes[index];
+            currentEpisode = episode;
+            
+            // Update UI
+            episodeTitle.textContent = episode.title;
+            episodeDate.textContent = episode.date + (episode.duration ? ' · ' + episode.duration : '');
+            
+            // Build audio URL
+            const audioUrl = CONFIG.audioBaseUrl + episode.filename;
+            audioUrlInput.value = audioUrl;
+            
+            // Load audio
+            loadAudio(audioUrl);
+        }
+        
+        // Load audio file
+        function loadAudio(url) {
+            if (!url) return;
+            
+            showLoading(true);
+            playBtn.disabled = true;
+            
+            // Stop current playback
+            audio.pause();
+            audio.currentTime = 0;
+            
+            // Set new source
+            audio.src = url;
+            audio.load();
+            
+            // Update UI
+            albumArt.classList.remove('playing');
+            playBtn.classList.remove('playing');
+            progressFill.style.width = '0%';
+            currentTimeEl.textContent = '0:00';
+            durationEl.textContent = '0:00';
+        }
+        
         // Play/Pause
         playBtn.addEventListener('click', () => {
             if (audio.paused) {
-                audio.play();
+                audio.play().catch(err => {
+                    showError('播放失败: ' + err.message);
+                });
                 playBtn.classList.add('playing');
                 albumArt.classList.add('playing');
             } else {
@@ -288,23 +496,45 @@
             }
         });
         
-        // Update progress
-        audio.addEventListener('timeupdate', () => {
-            const percent = (audio.currentTime / audio.duration) * 100;
-            progressFill.style.width = `${percent}%`;
-            currentTimeEl.textContent = formatTime(audio.currentTime);
+        // Audio events
+        audio.addEventListener('canplay', () => {
+            showLoading(false);
+            playBtn.disabled = false;
+            durationEl.textContent = formatTime(audio.duration);
         });
         
-        // Duration loaded
-        audio.addEventListener('loadedmetadata', () => {
-            durationEl.textContent = formatTime(audio.duration);
+        audio.addEventListener('playing', () => {
+            showLoading(false);
+            playBtn.disabled = false;
+            playBtn.classList.add('playing');
+            albumArt.classList.add('playing');
+        });
+        
+        audio.addEventListener('waiting', () => {
+            showLoading(true);
+        });
+        
+        audio.addEventListener('error', (e) => {
+            showLoading(false);
+            showError('音频加载失败，请检查链接是否有效');
+            playBtn.disabled = true;
+            console.error('Audio error:', audio.error);
+        });
+        
+        // Update progress
+        audio.addEventListener('timeupdate', () => {
+            const percent = (audio.currentTime / audio.duration) * 100 || 0;
+            progressFill.style.width = `${percent}%`;
+            currentTimeEl.textContent = formatTime(audio.currentTime);
         });
         
         // Progress bar click
         progressBar.addEventListener('click', (e) => {
             const rect = progressBar.getBoundingClientRect();
             const percent = (e.clientX - rect.left) / rect.width;
-            audio.currentTime = percent * audio.duration;
+            if (audio.duration) {
+                audio.currentTime = percent * audio.duration;
+            }
         });
         
         // Volume control
@@ -313,15 +543,20 @@
         });
         audio.volume = 0.8;
         
-        // Update audio source
+        // Episode select change
+        episodeSelect.addEventListener('change', (e) => {
+            loadEpisode(parseInt(e.target.value));
+        });
+        
+        // Update audio source (custom URL)
         updateBtn.addEventListener('click', () => {
-            const newUrl = audioUrlInput.value.trim();
-            if (newUrl) {
-                audio.src = newUrl;
-                audio.load();
-                if (!audio.paused) {
-                    audio.play();
-                }
+            const url = audioUrlInput.value.trim();
+            if (url) {
+                // Clear episode selection when using custom URL
+                currentEpisode = null;
+                episodeTitle.textContent = '自定义音频';
+                episodeDate.textContent = url.split('/').pop();
+                loadAudio(url);
             }
         });
         
@@ -330,7 +565,9 @@
             audio.currentTime = Math.max(0, audio.currentTime - 10);
         });
         nextBtn.addEventListener('click', () => {
-            audio.currentTime = Math.min(audio.duration, audio.currentTime + 10);
+            if (audio.duration) {
+                audio.currentTime = Math.min(audio.duration, audio.currentTime + 10);
+            }
         });
         
         // Audio ended
@@ -340,9 +577,8 @@
             progressFill.style.width = '0%';
         });
         
-        // Load initial audio
-        audio.src = audioUrlInput.value;
-        audio.load();
+        // Initialize
+        loadEpisodes();
     </script>
 </body>
 </html>
