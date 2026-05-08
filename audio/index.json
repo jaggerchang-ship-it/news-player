@@ -2,10 +2,17 @@
   "latest": "latest.mp3",
   "episodes": [
     {
-      "id": "20260508",
+      "id": "20260508-1301",
+      "date": "2026-05-08",
+      "title": "午间新闻简报",
+      "filename": "latest.mp3",
+      "duration": "约2分钟"
+    },
+    {
+      "id": "20260508-am",
       "date": "2026-05-08",
       "title": "早间新闻简报",
-      "filename": "latest.mp3",
+      "filename": "news_audio_20260508_1030.mp3",
       "duration": "约2分钟"
     }
   ]
